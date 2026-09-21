@@ -1,6 +1,6 @@
 codeunit 69000 "JAM BC-Gemini Connection"
 {
-    procedure PostToGemini(ApiKey: Text; RequestBodyText: Text) ResponseText: Text
+    procedure PostToGemini(ApiKey: Text; RequestBodyText: Text; URL: Text) ResponseText: Text
     var
         Conect1Err: Label 'HTTP Request failed with status code %1: %2';
         ComunicateErr: Label 'Failed to communicate with the Gemini API.';
@@ -9,10 +9,10 @@ codeunit 69000 "JAM BC-Gemini Connection"
         Headers: HttpHeaders;
         Content: HttpContent;
         Response: HttpResponseMessage;
-        Url: Text;
+        URLFinal: Text;
     begin
         // Construct the endpoint URL
-        Url := URLTok + ApiKey;
+        URLFinal := URL + ApiKey;
 
         // Prepare the HTTP body content and set Content-Type header
         Content.WriteFrom(RequestBodyText);
@@ -21,7 +21,7 @@ codeunit 69000 "JAM BC-Gemini Connection"
         Headers.Add('Content-Type', 'application/json');
 
         // Make the POST request
-        if Client.Post(Url, Content, Response) then begin
+        if Client.Post(URLFinal, Content, Response) then begin
             if Response.IsSuccessStatusCode() then begin
                 Response.Content().ReadAs(ResponseText);
             end else begin

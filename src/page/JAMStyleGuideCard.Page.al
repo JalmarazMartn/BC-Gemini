@@ -46,16 +46,19 @@ page 69001 "JAM Style Guide Card"
                 }
                 group(Test)
                 {
-                    field(ImputTest; ImputTest)
+                    field(InputTest; InputTest)
                     {
                         trigger OnAssistEdit()
                         var
+                            BCGeminiConnection: Codeunit "JAM BC-Gemini Connection";
+                            RequestBodyText: Text;
+                            ResponseText: Text;
                         begin
-
+                            RequestBodyText := BCGeminiConnection.BuildRequestBody(InputTest, Rec.GetSystemPrompt());
+                            Message(BCGeminiConnection.PostToGemini(rec."API Key", RequestBodyText, Rec.URL));
                         end;
                     }
                 }
-
             }
         }
     }
@@ -81,5 +84,5 @@ page 69001 "JAM Style Guide Card"
 
     var
         SystemPrompt: text;
-        ImputTest: Text;
+        InputTest: Text;
 }
