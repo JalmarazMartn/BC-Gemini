@@ -53,9 +53,14 @@ page 69001 "JAM Style Guide Card"
                             BCGeminiConnection: Codeunit "JAM BC-Gemini Connection";
                             RequestBodyText: Text;
                             ResponseText: Text;
+                            CumpleGuia: Integer;
+                            Sugerencia: Text;
+                            MayorError: Text;
                         begin
-                            RequestBodyText := BCGeminiConnection.BuildRequestBody(InputTest, Rec.GetSystemPrompt());
-                            Message(BCGeminiConnection.PostToGemini(rec."API Key", RequestBodyText, Rec.URL));
+                            RequestBodyText := BCGeminiConnection.BuildStyleGuideRequestBody(InputTest, Rec.GetSystemPrompt());
+                            ResponseText := BCGeminiConnection.PostToGemini(rec."API Key", RequestBodyText, Rec.URL);
+                            BCGeminiConnection.ParseStyleResponse(ResponseText, CumpleGuia, Sugerencia, MayorError);
+                            Message('%1 %2 %3', CumpleGuia, Sugerencia, MayorError);
                         end;
                     }
                 }

@@ -12,7 +12,7 @@ codeunit 69000 "JAM BC-Gemini Connection"
         URLFinal: Text;
     begin
         // Construct the endpoint URL
-        URLFinal := URL + ApiKey;
+        URLFinal := URL + '?key=' + ApiKey;
 
         // Prepare the HTTP body content and set Content-Type header
         Content.WriteFrom(RequestBodyText);
@@ -31,7 +31,7 @@ codeunit 69000 "JAM BC-Gemini Connection"
             Error(ComunicateErr);
     end;
 
-    procedure BuildRequestBody(PromptText: Text; SystemInstructionText: Text) RequestBodyText: Text
+    procedure BuildStyleGuideRequestBody(PromptText: Text; SystemInstructionText: Text) RequestBodyText: Text
     var
         RootObj: JsonObject;
         ContentsArray: JsonArray;
@@ -103,5 +103,117 @@ codeunit 69000 "JAM BC-Gemini Connection"
 
         // Write final JSON object to output text variable
         RootObj.WriteTo(RequestBodyText);
+    end;
+
+    procedure ParseStyleResponse(ResponseText: Text; var CumpleGuia: Integer; var Sugerencia: Text; var MayorError: Text): Boolean
+    var
+        RootObj: JsonObject;
+        CandidatesArray: JsonArray;
+        CandidateToken: JsonToken;
+        CandidateObj: JsonObject;
+        ContentObj: JsonObject;
+        PartsArray: JsonArray;
+        PartToken: JsonToken;
+        PartObj: JsonObject;
+
+        // Variables para el JSON estructurado interno
+        StructuredText: Text;
+        StructuredObj: JsonObject;
+        ValueToken: JsonToken;
+        CR: Char;
+        LF: Char;
+    begin
+        // Clear de las variables de salida
+        Clear(CumpleGuia);
+        Clear(Sugerencia);
+        Clear(MayorError);
+
+        // 1. Parsear la respuesta raíz de Gemini
+        if not RootObj.ReadFrom(ResponseText) then
+            exit(false);
+
+        // Obtener "candidates"
+        if not RootObj.Get('candidates', CandidateToken) then
+            exit(false);
+        CandidatesArray := CandidateToken.AsArray();
+
+        if CandidatesArray.Count() = 0 then
+            exit(false);
+
+        // Obtener el primer candidato
+        CandidatesArray.Get(0, CandidateToken);
+        CandidateObj := CandidateToken.AsObject();
+
+        // Obtener "content" -> "parts"
+        if not CandidateObj.Get('content', ValueToken) then
+            exit(false);
+        ContentObj := ValueToken.AsObject();
+
+        if not ContentObj.Get('parts', ValueToken) then
+            exit(false);
+        PartsArray := ValueToken.AsArray();
+
+        if PartsArray.Count() = 0 then
+            exit(false);
+
+        // Obtener el primer "part" y extraer su "text"
+        PartsArray.Get(0, PartToken);
+        PartObj := PartToken.AsObject();
+
+        if not PartObj.Get('text', ValueToken) then
+            exit(false);
+
+        StructuredText := ValueToken.AsValue().AsText();
+
+        // 2. LIMPIEZA DE CARACTERES: Eliminar saltos de línea ("\n" o "n" sueltas) que corrompen el JSON interno
+        CR := 13;
+        LF := 10;
+        StructuredText := StructuredText.Replace(Format(CR), '');
+        StructuredText := StructuredText.Replace(Format(LF), '');
+        StructuredText := StructuredText.Replace('\n', '');
+        StructuredText := StructuredText.Replace('n' + Format(CR), '');
+        StructuredText := StructuredText.Replace('n' + Format(LF), '');
+
+        // 3. Parsear el JSON devuelto dentro del campo text
+        if not StructuredObj.ReadFrom(StructuredText) then
+            exit(false);
+
+        // Extraer CumpleGuia
+        if StructuredObj.Get('CumpleGuia', ValueToken) then
+            CumpleGuia := ValueToken.AsValue().AsInteger();
+
+        // Extraer Sugerencia
+        if StructuredObj.Get('Sugerencia', ValueToken) then
+            Sugerencia := ValueToken.AsValue().AsText();
+
+        // Extraer MayorError
+        if StructuredObj.Get('MayorError', ValueToken) then
+            MayorError := ValueToken.AsValue().AsText();
+
+        exit(true);
+    end;
+
+    [EventSubscriber(ObjectType::Table, Database::"Gen. Journal Line", 'OnAfterValidateEvent', 'Description', false, false)]
+    local procedure CheckDescription(var Rec: Record "Gen. Journal Line")
+    var
+        StyleGuide: Record "JAM Style Guide";
+        RequestBodyText: Text;
+        ResponseText: Text;
+        CumpleGuia: Integer;
+        Sugerencia: Text;
+        MayorError: Text;
+    begin
+        if rec.Description = '' then
+            exit;
+        if not StyleGuide.get(Rec.RecordId.TableNo, Rec.FieldNo(Description)) then
+            exit;
+        RequestBodyText := BuildStyleGuideRequestBody(rec.Description, StyleGuide.GetSystemPrompt());
+        ResponseText := PostToGemini(StyleGuide."API Key", RequestBodyText, StyleGuide.URL);
+        ParseStyleResponse(ResponseText, CumpleGuia, Sugerencia, MayorError);
+        if CumpleGuia = 10 then
+            exit;
+        if not Confirm('Cumplimento de la guia de estilo %1.\Razón: %2\¿Desea sustituir por %3', true, CumpleGuia, MayorError, Sugerencia) then
+            exit;
+        rec.Description := CopyStr(Sugerencia, 1, MaxStrLen(rec.Description));
     end;
 }
