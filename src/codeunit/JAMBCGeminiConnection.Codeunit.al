@@ -1,31 +1,34 @@
 codeunit 69000 "JAM BC-Gemini Connection"
 {
+    var
+        SubsTextQst: Label 'Cumplimento de la guia de estilo %1.\Razón: %2\¿Desea sustituir por %3';
+
     procedure PostToGemini(ApiKey: Text; RequestBodyText: Text; URL: Text) ResponseText: Text
     var
         Conect1Err: Label 'HTTP Request failed with status code %1: %2';
         ComunicateErr: Label 'Failed to communicate with the Gemini API.';
         URLTok: Label 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=';
-        Client: HttpClient;
-        Headers: HttpHeaders;
-        Content: HttpContent;
-        Response: HttpResponseMessage;
+        HttpClient: HttpClient;
+        HttpHeaders: HttpHeaders;
+        HttpContent: HttpContent;
+        HttpResponseMessage: HttpResponseMessage;
         URLFinal: Text;
     begin
         // Construct the endpoint URL
         URLFinal := URL + '?key=' + ApiKey;
 
         // Prepare the HTTP body content and set Content-Type header
-        Content.WriteFrom(RequestBodyText);
-        Content.GetHeaders(Headers);
-        Headers.Remove('Content-Type');
-        Headers.Add('Content-Type', 'application/json');
+        HttpContent.WriteFrom(RequestBodyText);
+        HttpContent.GetHeaders(HttpHeaders);
+        HttpHeaders.Remove('Content-Type');
+        HttpHeaders.Add('Content-Type', 'application/json');
 
         // Make the POST request
-        if Client.Post(URLFinal, Content, Response) then begin
-            if Response.IsSuccessStatusCode() then begin
-                Response.Content().ReadAs(ResponseText);
+        if HttpClient.Post(URLFinal, HttpContent, HttpResponseMessage) then begin
+            if HttpResponseMessage.IsSuccessStatusCode() then begin
+                HttpResponseMessage.Content().ReadAs(ResponseText);
             end else begin
-                Error(Conect1Err, Response.HttpStatusCode(), Response.ReasonPhrase());
+                Error(Conect1Err, HttpResponseMessage.HttpStatusCode(), HttpResponseMessage.ReasonPhrase());
             end;
         end else
             Error(ComunicateErr);
@@ -212,7 +215,7 @@ codeunit 69000 "JAM BC-Gemini Connection"
         ParseStyleResponse(ResponseText, CumpleGuia, Sugerencia, MayorError);
         if CumpleGuia = 10 then
             exit;
-        if not Confirm('Cumplimento de la guia de estilo %1.\Razón: %2\¿Desea sustituir por %3', true, CumpleGuia, MayorError, Sugerencia) then
+        if not Confirm(SubsTextQst, true, CumpleGuia, MayorError, Sugerencia) then
             exit;
         rec.Description := CopyStr(Sugerencia, 1, MaxStrLen(rec.Description));
     end;
